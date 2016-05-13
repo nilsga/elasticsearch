@@ -163,6 +163,11 @@ public class TimeZoneRoundingTests extends ESTestCase {
         assertThat(tzRounding.round(time("2014-10-26T01:01:01", DateTimeZone.forID("CET"))),
                 equalTo(time("2014-10-26T01:00:00", DateTimeZone.forID("CET"))));
 
+        tzRounding = TimeZoneRounding.builder(DateTimeUnit.HOUR_OF_DAY).timeZone(DateTimeZone.forID("Europe/Oslo")).build();
+        long timeBeforeSwitch = time("2015-10-25T01:00:00.000+02:00", DateTimeZone.forID("Europe/Oslo"));
+        long expectedNextValue = time("2015-10-25T02:00:00.000+02:00", DateTimeZone.forID("Europe/Oslo"));
+        assertThat(tzRounding.nextRoundingValue(timeBeforeSwitch), equalTo(expectedNextValue));
+
         // testing non savings to savings switch
         tzRounding = TimeZoneRounding.builder(DateTimeUnit.HOUR_OF_DAY).timeZone(DateTimeZone.forID("UTC")).build();
         assertThat(tzRounding.round(time("2014-03-30T01:01:01", DateTimeZone.forID("CET"))),

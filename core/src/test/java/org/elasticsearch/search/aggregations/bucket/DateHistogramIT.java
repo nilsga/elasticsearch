@@ -64,7 +64,9 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import static org.elasticsearch.common.xcontent.XContentFactory.jsonBuilder;
+import static org.elasticsearch.index.query.QueryBuilders.boolQuery;
 import static org.elasticsearch.index.query.QueryBuilders.matchAllQuery;
+import static org.elasticsearch.index.query.QueryBuilders.rangeQuery;
 import static org.elasticsearch.search.aggregations.AggregationBuilders.*;
 import static org.elasticsearch.test.hamcrest.ElasticsearchAssertions.*;
 import static org.hamcrest.Matchers.*;
@@ -1301,6 +1303,39 @@ public class DateHistogramIT extends ESIntegTestCase {
         assertThat(bucket.getKeyAsString(), equalTo(getBucketKeyAsString(key)));
         assertThat(((DateTime) bucket.getKey()), equalTo(key));
         assertThat(bucket.getDocCount(), equalTo(5l));
+    }
+
+    public void testCESTtoCETTransition() throws Exception {
+
+        String index = "testcesttocettransition";
+        prepareCreate(index)
+            .setSettings(Settings.builder().put(indexSettings()).put("index.number_of_shards", 1).put("index.number_of_replicas", 0))
+            .execute().actionGet();
+
+        List<IndexRequestBuilder> builders = new ArrayList<>();
+
+        DateTime oneOClock = new DateTime(2015, 10, 25, 1, 0, 1, DateTimeZone.forID("Europe/Oslo"));
+        DateTime twoOClock = oneOClock.plusHours(1);
+        DateTime twoOClockRepeated = twoOClock.plusHours(1);
+        DateTime threeOClock = twoOClockRepeated.plusHours(1);
+
+        builders.add(indexDoc(index, oneOClock, 1));
+        builders.add(indexDoc(index, twoOClock, 2));
+        builders.add(indexDoc(index, twoOClockRepeated, 3));
+        builders.add(indexDoc(index, threeOClock, 4));
+
+        indexRandom(true, builders);
+        ensureSearchable(index);
+
+        SearchResponse response = client().prepareSearch(index)
+            .addAggregation(dateHistogram("histo").field("date").timeZone("Europe/Oslo").interval(DateHistogramInterval.HOUR).minDocCount(0))
+            .execute().actionGet();
+
+        Histogram histo = response.getAggregations().get("histo");
+        List<? extends Bucket> buckets = histo.getBuckets();
+        assertThat(buckets.size(), equalTo(4));
+
+        internalCluster().wipeIndices(index);
     }
 
     public void testIssue6965() {
